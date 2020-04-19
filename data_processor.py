@@ -1,8 +1,18 @@
 import os
 import xml.etree.ElementTree as ET
+from chemlistem import get_mini_model, get_trad_model, get_ensemble_model
 
 
 dataset = ['DrugBank', 'MedLine']
+
+
+def get_er_model(model='ensemble-chemlistem'):
+    if model == 'traditional-chemlistem':
+        return get_trad_model()
+    elif model == 'mini-chemlistem':
+        return get_mini_model()
+    elif model == 'ensemble-chemlistem':
+        return get_ensemble_model()
 
 
 def read_xml_file(file_path):
@@ -91,3 +101,51 @@ class Dataset:
                 if '.xml' in filename:
                     ds.documents.append(Document.read_from_xml(filepath))
         return ds
+
+
+def transform_pubmed():
+    source = './Raw/pubmed_Drug-Drug_interaction_abstract_result.xml'
+    root = read_xml_file(source)
+    count = 0
+
+    er_model = get_er_model()
+
+    for article in root.iter('PubmedArticle'):
+        sentences = []
+
+        for title in article.iter('ArticleTitle'):
+            print('Title')
+            title = "".join(title.itertext())
+            sentences.append(title)
+            print(title)
+
+        for text in article.iter('AbstractText'):
+            print('Abstract')
+            abstract = "".join(text.itertext())
+            for sentence in abstract.split('.'):
+                sentences.append(sentence)
+            print(abstract)
+
+        article_id = None
+        for id_e in article.iter('ArticleId'):
+            if id_e.attrib['IdType'] == 'pubmed':
+                print('ID')
+                article_id = "".join(id_e.itertext())
+                print(article_id)
+
+        root = ET.Element("document", attrib={'id': article_id})
+
+        for sentence in sentences:
+            sentence_element = ET.SubElement(root, 'sentence', attrib={'text': sentence})
+            for (start, end, entity, _, _) in er_model.process(sentence):
+                ET.SubElement(sentence_element, 'entity', attrib={'text': entity, 'charOffset': str(start) + '-' + str(end)})
+        et = ET.ElementTree(root)
+        et.write('./Train/PubMed/' + article_id + '.xml', encoding='utf-8', xml_declaration=True)
+        count += 1
+        print('--')
+        if count > 10:
+            break
+
+transform_pubmed()
+
+
