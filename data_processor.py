@@ -3,6 +3,8 @@ import xml.etree.ElementTree as ET
 from chemlistem import get_mini_model, get_trad_model, get_ensemble_model
 
 
+
+
 dataset = ['DrugBank', 'MedLine']
 
 
@@ -103,7 +105,15 @@ class Dataset:
         return ds
 
 
-def transform_pubmed():
+def check_sentence(sent):
+    keywords = ['adverse', 'concern', 'inadvertently', 'inadvertent', 'adversely']
+    for keyword in keywords:
+        if keyword in sent:
+            return True
+    return False
+
+
+def transform_pubmed(num_files=None):
     source = './Raw/pubmed_Drug-Drug_interaction_abstract_result.xml'
     root = read_xml_file(source)
     count = 0
@@ -127,23 +137,29 @@ def transform_pubmed():
             print(abstract)
 
         article_id = None
-        for id_e in article.iter('ArticleId'):
-            if id_e.attrib['IdType'] == 'pubmed':
-                print('ID')
-                article_id = "".join(id_e.itertext())
-                print(article_id)
+        for id_list in article.iter('ArticleIdList'):
+            for id_e in id_list.iter('ArticleId'):
+                if id_e.attrib['IdType'] == 'pubmed':
+                    print('ID')
+                    article_id = "".join(id_e.itertext())
+                    print(article_id)
+                    break
+            break
 
         root = ET.Element("document", attrib={'id': article_id})
 
         for sentence in sentences:
             sentence_element = ET.SubElement(root, 'sentence', attrib={'text': sentence})
-            for (start, end, entity, _, _) in er_model.process(sentence):
+            entities = er_model.process(sentence)
+            if len(entities) > 1 and check_sentence(sentence):
+                print('Potential:', sentence)
+            for (start, end, entity, _, _) in entities:
                 ET.SubElement(sentence_element, 'entity', attrib={'text': entity, 'charOffset': str(start) + '-' + str(end)})
         et = ET.ElementTree(root)
         et.write('./Train/PubMed/' + article_id + '.xml', encoding='utf-8', xml_declaration=True)
         count += 1
         print('--')
-        if count > 10:
+        if num_files and count >= num_files:
             break
 
 transform_pubmed()
