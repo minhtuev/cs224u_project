@@ -113,6 +113,15 @@ def check_sentence(sent):
     return False
 
 
+def findall(p, s):
+    '''Yields all the positions of
+    the pattern p in the string s.'''
+    i = s.find(p)
+    while i != -1:
+        yield i
+        i = s.find(p, i+1)
+
+
 def transform_pubmed(num_files=None):
     source = './Raw/pubmed_Drug-Drug_interaction_abstract_result.xml'
     root = read_xml_file(source)
@@ -147,20 +156,38 @@ def transform_pubmed(num_files=None):
             break
 
         root = ET.Element("document", attrib={'id': article_id})
+        abbr_dic = {}
 
         for sentence in sentences:
             sentence_element = ET.SubElement(root, 'sentence', attrib={'text': sentence})
             entities = er_model.process(sentence)
+            entity_map = {}
+
+            # Adding any abbreviation to the abbreviation dictionary
+            for (start, end, entity, _, _) in entities:
+                if len(entity) <= 4:
+                    abbr_dic[entity] = 1
+                entity_map[start] = (entity, end)
+
+            # Gettiny any additional abbreviation
+            for abbr in abbr_dic:
+                for ent_start in findall(abbr, sentence):
+                    if ent_start not in entity_map:
+                        ent_end = ent_start + len(entity) - 1
+                        entity_map[ent_start] = (entity, ent_end)
+                        entities.append((ent_start, ent_end, abbr, None, None))
+
             if len(entities) > 1 and check_sentence(sentence):
                 print('Potential:', sentence)
-            for (start, end, entity, _, _) in entities:
-                ET.SubElement(sentence_element, 'entity', attrib={'text': entity, 'charOffset': str(start) + '-' + str(end)})
+                for (start, end, entity, _, _) in entities:
+                    ET.SubElement(sentence_element, 'entity', attrib={'text': entity, 'charOffset': str(start) + '-' + str(end)})
         et = ET.ElementTree(root)
         et.write('./Train/PubMed/' + article_id + '.xml', encoding='utf-8', xml_declaration=True)
         count += 1
         print('--')
         if num_files and count >= num_files:
             break
+
 
 transform_pubmed()
 
