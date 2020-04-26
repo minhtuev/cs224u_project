@@ -105,8 +105,10 @@ class Dataset:
         return ds
 
 
-def check_sentence(sent):
+def check_sentence(sent, p1=None, p2=None):
     keywords = ['adverse', 'concern', 'inadvertently', 'inadvertent', 'adversely']
+    if p1 and p2:
+        sent = sent[p1:p2]
     for keyword in keywords:
         if keyword in sent:
             return True
@@ -158,29 +160,54 @@ def transform_pubmed(num_files=None):
         root = ET.Element("document", attrib={'id': article_id})
         abbr_dic = {}
 
+        # example of entity ID: DDI - DrugBank.d532.s2.e0
+        sent_count = 1
         for sentence in sentences:
             sentence_element = ET.SubElement(root, 'sentence', attrib={'text': sentence})
             entities = er_model.process(sentence)
-            entity_map = {}
+            entity_loc_map = {}
 
             # Adding any abbreviation to the abbreviation dictionary
             for (start, end, entity, _, _) in entities:
-                if len(entity) <= 4:
+                if len(entity) <= 5:
+                    print('abbreviation:', entity)
                     abbr_dic[entity] = 1
-                entity_map[start] = (entity, end)
+                elif end + 1 < len(sentence) and sentence[start - 1] == '(' and sentence[end + 1] == ')':
+                    print('abbreviation:', entity)
+                    abbr_dic[entity] = 1
+                entity_loc_map[start] = (entity, end)
 
-            # Gettiny any additional abbreviation
+            # Getting any additional abbreviation
             for abbr in abbr_dic:
                 for ent_start in findall(abbr, sentence):
-                    if ent_start not in entity_map:
+                    if ent_start not in entity_loc_map:
+                        print('Detecting an unrecognized abbreviation {} at {}'.format(abbr, ent_start))
                         ent_end = ent_start + len(entity) - 1
-                        entity_map[ent_start] = (entity, ent_end)
+                        entity_loc_map[ent_start] = (entity, ent_end)
                         entities.append((ent_start, ent_end, abbr, None, None))
 
-            if len(entities) > 1 and check_sentence(sentence):
-                print('Potential:', sentence)
-                for (start, end, entity, _, _) in entities:
-                    ET.SubElement(sentence_element, 'entity', attrib={'text': entity, 'charOffset': str(start) + '-' + str(end)})
+            entity_map = []
+            entity_count = 0
+            for (start, end, entity, _, _) in entities:
+                entity_id = "DDI - PubMed.{}.s{}.e{}".format(article_id, sent_count, entity_count)
+                ET.SubElement(sentence_element, 'entity', attrib={'text': entity, 'charOffset': str(start) + '-' + str(end), 'id': entity_id})
+                entity_map.append((entities[entity_count], entity_id, start))
+                entity_count += 1
+
+            # sort entities in order of start
+            entity_map.sort(key=lambda x: x[2])
+            for i in range(len(entity_map) - 1):
+                for j in range(i, len(entity_map)):
+                    (entity1, id1, start1) = entity_map[i]
+                    (entity2, id2, start2) = entity_map[j]
+                    if check_sentence(sentence, start1, start2):
+                        ET.SubElement(sentence_element, 'pair', attrib={'entity1': id1, 'entity2': id2, 'ddi': "true"})
+                        print("Pair:", entity1, entity2)
+                        print(sentence)
+                    else:
+                        ET.SubElement(sentence_element, 'pair', attrib={'entity1': id1, 'entity2': id2, 'ddi': "false"})
+            sent_count += 1
+
         et = ET.ElementTree(root)
         et.write('./Train/PubMed/' + article_id + '.xml', encoding='utf-8', xml_declaration=True)
         count += 1
@@ -189,6 +216,6 @@ def transform_pubmed(num_files=None):
             break
 
 
-transform_pubmed()
+transform_pubmed(num_files=10)
 
 
