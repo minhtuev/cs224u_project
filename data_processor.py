@@ -160,7 +160,7 @@ def transform_pubmed(num_files=None):
         root = ET.Element("document", attrib={'id': article_id})
         abbr_dic = {}
 
-        # example of entity ID: DDI - DrugBank.d532.s2.e0
+        # example of entity ID: DDI-DrugBank.d532.s2.e0
         sent_count = 1
         for sentence in sentences:
             sentence_element = ET.SubElement(root, 'sentence', attrib={'text': sentence})
@@ -201,11 +201,11 @@ def transform_pubmed(num_files=None):
                     (entity1, id1, start1) = entity_map[i]
                     (entity2, id2, start2) = entity_map[j]
                     if check_sentence(sentence, start1, start2):
-                        ET.SubElement(sentence_element, 'pair', attrib={'entity1': id1, 'entity2': id2, 'ddi': "true"})
+                        ET.SubElement(sentence_element, 'pair', attrib={'e1': id1, 'e2': id2, 'ddi': "true"})
                         print("Pair:", entity1, entity2)
                         print(sentence)
                     else:
-                        ET.SubElement(sentence_element, 'pair', attrib={'entity1': id1, 'entity2': id2, 'ddi': "false"})
+                        ET.SubElement(sentence_element, 'pair', attrib={'e1': id1, 'e2': id2, 'ddi': "false"})
             sent_count += 1
 
         et = ET.ElementTree(root)
