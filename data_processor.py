@@ -4,7 +4,6 @@ from chemlistem import get_mini_model, get_trad_model, get_ensemble_model
 
 
 
-
 dataset = ['DrugBank', 'MedLine']
 
 
@@ -189,6 +188,8 @@ def transform_pubmed(num_files=None):
             break
 
 
-transform_pubmed()
+
+
+#transform_pubmed()
 
 
