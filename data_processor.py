@@ -189,7 +189,7 @@ def transform_pubmed(num_files=None):
             entity_map = []
             entity_count = 0
             for (start, end, entity, _, _) in entities:
-                entity_id = "DDI - PubMed.{}.s{}.e{}".format(article_id, sent_count, entity_count)
+                entity_id = "DDI-PubMed.{}.s{}.e{}".format(article_id, sent_count, entity_count)
                 ET.SubElement(sentence_element, 'entity', attrib={'text': entity, 'charOffset': str(start) + '-' + str(end), 'id': entity_id})
                 entity_map.append((entities[entity_count], entity_id, start))
                 entity_count += 1
