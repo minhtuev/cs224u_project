@@ -92,11 +92,12 @@ class Dataset:
         self.documents = documents or []
 
     @staticmethod
-    def from_training_data(name):
+    def from_training_data(name, verbose=False):
         ds = Dataset(name)
         path = "./Train/" + name
         for _, _, files in os.walk(path, topdown=False):
-            print(files)
+            if verbose:
+                print(files)
             for filename in files:
                 filepath = path + '/' + filename
                 if '.xml' in filename:
