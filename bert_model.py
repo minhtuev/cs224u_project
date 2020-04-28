@@ -20,13 +20,16 @@ logger.level = logging.ERROR
 
 
 class HfBertClassifierModel(nn.Module):
-    def __init__(self, n_classes, weights_name='bert-base-uncased'):
+    def __init__(self, n_classes, max_sentence_length=118, weights_name='bert-base-uncased'):
         super().__init__()
         self.n_classes = n_classes
         self.weights_name = weights_name
         self.bert = BertModel.from_pretrained(self.weights_name)
         self.hidden_dim = self.bert.embeddings.word_embeddings.embedding_dim
-        # The only new parameters -- the classifier layer:
+        self.max_sentence_length = max_sentence_length
+
+        self.head = nn.Sequential(nn.Linear(self.hidden_dim, self.max_sentence_length), nn.ReLU(), nn.Linear(self.max_sentence_length, self.max_sentence_length))
+        self.tail = nn.Sequential(nn.Linear(self.hidden_dim, self.max_sentence_length), nn.ReLU(), nn.Linear(self.max_sentence_length, self.max_sentence_length))
         self.W = nn.Linear(self.hidden_dim, self.n_classes)
 
     def forward(self, X):
@@ -44,12 +47,19 @@ class HfBertClassifierModel(nn.Module):
         mask = X[:, 1, :]
         (final_hidden_states, cls_output) = self.bert(
             indices, attention_mask=mask)
+        head = self.head(final_hidden_states)
+        tail = self.tail(final_hidden_states)
+        # for the forward pass, we need to return a score and the tensor
+
         return self.W(cls_output)
 
 
 class HfBertClassifier(TorchShallowNeuralClassifier):
-    def __init__(self, weights_name, *args, **kwargs):
+    def __init__(self, weights_name, max_sentence_length, *args, **kwargs):
+        # default to bert-uncased
         self.weights_name = weights_name
+        self.max_sentence_length = max_sentence_length or 118
+        # default to bert-uncased
         self.tokenizer = BertTokenizer.from_pretrained(self.weights_name)
         super().__init__(*args, **kwargs)
 
@@ -59,7 +69,7 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
 
         """
         bert = HfBertClassifierModel(
-            self.n_classes_, weights_name=self.weights_name)
+            self.n_classes_, weights_name=self.weights_name, max_sentence_length=self.max_sentence_length)
         bert.train()
         return bert
 
@@ -88,11 +98,11 @@ DB_dataset = data_processor.Dataset('DrugBank').from_training_data('DrugBank')
 ML_dataset = data_processor.Dataset('MedLine').from_training_data('MedLine')
 
 
-def create_classification_task(dataset):
+def create_classification_task(dataset, maxsize=None):
     '''Take a dataprocessor dataset object and return a Pandas dataframe for classification task '''
 
     classification_task_df = pd.DataFrame(columns=['e1_id','e1_type','e1_name','e2_id','e2_type','e2_name','sentence','ddi','label'])
-
+    count = 0
     for doc in dataset.documents:
         for sent in doc.sentences:
             if len(sent.map)==0:
@@ -108,7 +118,7 @@ def create_classification_task(dataset):
                         'ddi':False,
                         'label':'NO_DDI'
                     },ignore_index=True)
-                if len(sent.entities)>2:
+                elif len(sent.entities)>2:
                     for (i,j)in itertools.combinations(range(len(sent.entities)),2):
                         classification_task_df = classification_task_df.append({
                             'e1_id': sent.entities[i]._id,
@@ -121,7 +131,7 @@ def create_classification_task(dataset):
                             'ddi':False,
                             'label':'NO_DDI'
                         },ignore_index=True)
-            if len(sent.map)>0:
+            elif len(sent.map) > 0: # if there is a pair
                 for i, (k, v) in enumerate(sent.map.items()):
                     for entity in sent.entities:
                         if entity._id == k:
@@ -143,27 +153,34 @@ def create_classification_task(dataset):
                             'ddi':True,
                             'label':v[1]
                         },ignore_index=True)
+            count += 1
+            if maxsize and count > maxsize:
+                return classification_task_df
     return classification_task_df
 
 
-def run_experiment(batch_size=16, max_iter=4, eta=0.00002, test_size=0.2, random_state=42):
+def run_experiment(batch_size=16, max_iter=4, eta=0.00002, test_size=0.2, random_state=42, datasize=None):
+    print('Running exp')
     classification_task_df = pd.concat([
-        create_classification_task(DB_dataset),
-        create_classification_task(ML_dataset)
+        create_classification_task(DB_dataset, maxsize=datasize),
+        create_classification_task(ML_dataset, maxsize=datasize)
     ])
 
+    max_sentence_length = 120
     bert_experiment_1 = HfBertClassifier(
         'bert-base-uncased',
+        max_sentence_length,
         batch_size=batch_size, # small batch size for use on notebook
         max_iter=max_iter,
         eta=eta)
 
     X_text_train, X_text_test, y_train, y_test = train_test_split(classification_task_df['sentence'], classification_task_df['label'], test_size=test_size, random_state=random_state)
-    X_indices_train = bert_experiment_1.encode(X_text_train)
-    X_indices_test = bert_experiment_1.encode(X_text_test)
+    X_indices_train = bert_experiment_1.encode(X_text_train, max_length=max_sentence_length)
+    X_indices_test = bert_experiment_1.encode(X_text_test, max_length=max_sentence_length)
     time = bert_experiment_1.fit(X_indices_train, y_train)
     bert_experiment_1_preds = bert_experiment_1.predict(X_indices_test)
     print(classification_report(bert_experiment_1_preds, y_test , digits=3))
     bert_experiment_1.to_pickle('BERT_exp1.pkl')
 
-run_experiment()
+
+run_experiment(datasize=200)
