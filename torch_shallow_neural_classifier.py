@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.utils.data
 from torch_model_base import TorchModelBase
 from utils import progress_bar
+from tqdm import tqdm
 
 __author__ = "Christopher Potts"
 __version__ = "CS224u, Stanford, Spring 2020"
@@ -96,25 +97,28 @@ class TorchShallowNeuralClassifier(TorchModelBase):
         # Optimization:
         loss = nn.CrossEntropyLoss()
         # Train:
-        for iteration in range(1, self.max_iter+1):
-            epoch_error = 0.0
-            for X_batch, y_batch in dataloader:
-                X_batch = X_batch.to(self.device, non_blocking=True)
-                y_batch = y_batch.to(self.device, non_blocking=True)
-                batch_preds = self.model(X_batch)
-                err = loss(batch_preds, y_batch)
-                epoch_error += err.item()
-                self.opt.zero_grad()
-                err.backward()
-                self.opt.step()
-            # Incremental predictions where possible:
-            if X_dev is not None and iteration > 0 and iteration % dev_iter == 0:
-                self.dev_predictions[iteration] = self.predict(X_dev)
-                self.model.train()
-            self.errors.append(epoch_error)
-            progress_bar(
-                "Finished epoch {} of {}; error is {}".format(
-                    iteration, self.max_iter, epoch_error))
+        with tqdm(total=self.max_iter) as pbar:
+            for iteration in range(1, self.max_iter+1):
+                epoch_error = 0.0
+                for X_batch, y_batch in dataloader:
+                    X_batch = X_batch.to(self.device, non_blocking=True)
+                    y_batch = y_batch.to(self.device, non_blocking=True)
+                    batch_preds = self.model(X_batch)
+                    err = loss(batch_preds, y_batch)
+                    epoch_error += err.item()
+                    self.opt.zero_grad()
+                    err.backward()
+                    self.opt.step()
+                # Incremental predictions where possible:
+                if X_dev is not None and iteration > 0 and iteration % dev_iter == 0:
+                    self.dev_predictions[iteration] = self.predict(X_dev)
+                    self.model.train()
+                self.errors.append(epoch_error)
+                progress_bar(
+                    "Finished epoch {} of {}; error is {}".format(
+                        iteration, self.max_iter, epoch_error))
+                pbar.update(1)
+        pbar.close()
         return self
 
     def predict_proba(self, X):

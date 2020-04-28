@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<document id="23461503"><sentence text="[Fatal drug-drug interaction between 5-fluorouracil and brivudine]."><entity charOffset="37-51" id="DDI-PubMed.23461503.s1.e0" text="5-fluorouracil" /><entity charOffset="56-65" id="DDI-PubMed.23461503.s1.e1" text="brivudine" /><pair ddi="false" e1="DDI-PubMed.23461503.s1.e0" e2="DDI-PubMed.23461503.s1.e0" /><pair ddi="false" e1="DDI-PubMed.23461503.s1.e0" e2="DDI-PubMed.23461503.s1.e1" /></sentence></document>

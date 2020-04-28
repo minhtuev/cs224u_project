@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<document id="4046133"><sentence text="Phenytoin-dexamethasone: a possible drug-drug interaction."><entity charOffset="0-9" id="DDI-PubMed.4046133.s1.e0" text="Phenytoin" /><entity charOffset="10-23" id="DDI-PubMed.4046133.s1.e1" text="dexamethasone" /><pair ddi="false" e1="DDI-PubMed.4046133.s1.e0" e2="DDI-PubMed.4046133.s1.e0" /><pair ddi="false" e1="DDI-PubMed.4046133.s1.e0" e2="DDI-PubMed.4046133.s1.e1" /></sentence></document>

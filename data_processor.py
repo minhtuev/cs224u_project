@@ -16,8 +16,9 @@ def get_er_model(model='ensemble-chemlistem'):
         return get_ensemble_model()
 
 
-def read_xml_file(file_path):
-    print(file_path)
+def read_xml_file(file_path, verbose=False):
+    if verbose:
+        print(file_path)
     return ET.parse(file_path).getroot()
 
 
@@ -44,6 +45,7 @@ class Sentence:
         self._id = sent_id
         self.text = text or ''
         self.entities = entities or []
+        # entity pair map
         self.map = {}
 
     @staticmethod
@@ -75,8 +77,8 @@ class Document:
         self.sentences = sentences or []
 
     @staticmethod
-    def read_from_xml(filepath):
-        return Document.from_xml(read_xml_file(filepath))
+    def read_from_xml(filepath, verbose=False):
+        return Document.from_xml(read_xml_file(filepath, verbose=verbose))
 
     @staticmethod
     def from_xml(xml_object):
@@ -92,15 +94,16 @@ class Dataset:
         self.documents = documents or []
 
     @staticmethod
-    def from_training_data(name):
+    def from_training_data(name, verbose=False):
         ds = Dataset(name)
         path = "./Train/" + name
         for _, _, files in os.walk(path, topdown=False):
-            print(files)
+            if verbose:
+                print(files)
             for filename in files:
                 filepath = path + '/' + filename
                 if '.xml' in filename:
-                    ds.documents.append(Document.read_from_xml(filepath))
+                    ds.documents.append(Document.read_from_xml(filepath, verbose=verbose))
         return ds
 
 
@@ -215,6 +218,6 @@ def transform_pubmed(num_files=None):
             break
 
 
-transform_pubmed(num_files=10)
+#transform_pubmed(num_files=10)
 
 

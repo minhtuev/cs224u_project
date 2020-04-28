@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<document id="22878691"><sentence text="Switching from intravenous to oral tacrolimus and voriconazole leads to a more pronounced drug-drug interaction."><entity charOffset="35-45" id="DDI-PubMed.22878691.s1.e0" text="tacrolimus" /><entity charOffset="50-62" id="DDI-PubMed.22878691.s1.e1" text="voriconazole" /><pair ddi="false" e1="DDI-PubMed.22878691.s1.e0" e2="DDI-PubMed.22878691.s1.e0" /><pair ddi="false" e1="DDI-PubMed.22878691.s1.e0" e2="DDI-PubMed.22878691.s1.e1" /></sentence></document>
