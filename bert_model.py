@@ -5,6 +5,7 @@ from torch_shallow_neural_classifier import TorchShallowNeuralClassifier
 from sklearn.metrics import classification_report
 import utils
 import torch.nn as nn
+import torch
 from transformers import BertModel, BertTokenizer
 import pandas as pd
 import itertools
@@ -28,9 +29,24 @@ class HfBertClassifierModel(nn.Module):
         self.hidden_dim = self.bert.embeddings.word_embeddings.embedding_dim
         self.max_sentence_length = max_sentence_length
 
+        # dim : max length x max length
         self.head = nn.Sequential(nn.Linear(self.hidden_dim, self.max_sentence_length), nn.ReLU(), nn.Linear(self.max_sentence_length, self.max_sentence_length))
         self.tail = nn.Sequential(nn.Linear(self.hidden_dim, self.max_sentence_length), nn.ReLU(), nn.Linear(self.max_sentence_length, self.max_sentence_length))
         self.W = nn.Linear(self.hidden_dim, self.n_classes)
+        # initialize a random tensor
+        self.L = torch.randn(self.hidden_dim, self.hidden_dim)
+
+    def bilinear(self, head, tail):
+        # first, each head/tail is batchsize x n x n, so we need to reshape into bn x d
+
+        # Do the multiplications
+        head = head.reshape(int(head.shape[0]*head.shape[1]*head.shape[2]/self.hidden_dim), self.hidden_dim)
+        # (bn x d) (d x d) -> (bn x d)
+        lin = torch.mm(head, self.L)
+        # (bn x d) (bn x d)T -> (bn x bn)
+        tail = tail.reshape(int(tail.shape[0]*tail.shape[1]*tail.shape[2]/self.hidden_dim), self.hidden_dim)
+        lin = torch.mm(lin, tail.transpose(1, 0))
+        return lin
 
     def forward(self, X):
         """Here, `X` is an np.array in which each element is a pair
@@ -38,6 +54,7 @@ class HfBertClassifierModel(nn.Module):
         indicating whether the token is masked. The `fit` method will
         train all these parameters against a softmax objective.
 
+        The shape of X is batchsize x 2 x max_sentence_length
         """
         indices = X[:, 0, :]
         # Type conversion, since the base class insists on
@@ -50,7 +67,7 @@ class HfBertClassifierModel(nn.Module):
         head = self.head(final_hidden_states)
         tail = self.tail(final_hidden_states)
         # for the forward pass, we need to return a score and the tensor
-
+        output = self.bilinear(head, tail)
         return self.W(cls_output)
 
 
