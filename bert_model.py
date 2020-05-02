@@ -10,7 +10,10 @@ from transformers import BertModel, BertTokenizer
 import pandas as pd
 import itertools
 from sklearn.model_selection import train_test_split
-
+import numpy as np
+import torch.utils.data
+from utils import progress_bar
+from tqdm import tqdm
 
 utils.fix_random_seeds()
 SEMEVAL_HOME = os.path.join("semeval", "task9_train_pair")
@@ -30,23 +33,26 @@ class HfBertClassifierModel(nn.Module):
         self.max_sentence_length = max_sentence_length
 
         # dim : max length x max length
-        self.head = nn.Sequential(nn.Linear(self.hidden_dim, self.max_sentence_length), nn.ReLU(), nn.Linear(self.max_sentence_length, self.max_sentence_length))
-        self.tail = nn.Sequential(nn.Linear(self.hidden_dim, self.max_sentence_length), nn.ReLU(), nn.Linear(self.max_sentence_length, self.max_sentence_length))
+        self.head = nn.Sequential(nn.Linear(self.hidden_dim, self.max_sentence_length), nn.ReLU(), nn.Linear(self.max_sentence_length, self.hidden_dim))
+        self.tail = nn.Sequential(nn.Linear(self.hidden_dim, self.max_sentence_length), nn.ReLU(), nn.Linear(self.max_sentence_length, self.hidden_dim))
         self.W = nn.Linear(self.hidden_dim, self.n_classes)
         # initialize a random tensor
+        #self.labels = 2
         self.L = torch.randn(self.hidden_dim, self.hidden_dim)
 
     def bilinear(self, head, tail):
         # first, each head/tail is batchsize x n x n, so we need to reshape into bn x d
 
         # Do the multiplications
-        head = head.reshape(int(head.shape[0]*head.shape[1]*head.shape[2]/self.hidden_dim), self.hidden_dim)
         # (bn x d) (d x d) -> (bn x d)
-        lin = torch.mm(head, self.L)
+        lin = torch.mm(head.reshape([-1, self.hidden_dim]), self.L).reshape([-1, self.max_sentence_length, self.hidden_dim])
+        bi_lin = torch.matmul(lin, tail.reshape([-1, self.hidden_dim, self.max_sentence_length]))
         # (bn x d) (bn x d)T -> (bn x bn)
-        tail = tail.reshape(int(tail.shape[0]*tail.shape[1]*tail.shape[2]/self.hidden_dim), self.hidden_dim)
-        lin = torch.mm(lin, tail.transpose(1, 0))
-        return lin
+        #tail = tail.reshape(int(tail.shape[0]*tail.shape[1]*tail.shape[2]/self.hidden_dim), self.hidden_dim)
+        # lin = torch.mm(lin, tail)
+        #import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
+        return torch.sigmoid(bi_lin)
 
     def forward(self, X):
         """Here, `X` is an np.array in which each element is a pair
@@ -68,7 +74,9 @@ class HfBertClassifierModel(nn.Module):
         tail = self.tail(final_hidden_states)
         # for the forward pass, we need to return a score and the tensor
         output = self.bilinear(head, tail)
-        return self.W(cls_output)
+        return output
+        # import pdb; pdb.set_trace()
+        # return self.W(cls_output)
 
 
 class HfBertClassifier(TorchShallowNeuralClassifier):
@@ -79,6 +87,78 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
         # default to bert-uncased
         self.tokenizer = BertTokenizer.from_pretrained(self.weights_name)
         super().__init__(*args, **kwargs)
+
+
+    def fit(self, X, y, **kwargs):
+        """Standard `fit` method.
+
+        Parameters
+        ----------
+        X : np.array
+        y : array-like
+        kwargs : dict
+            For passing other parameters. If 'X_dev' is included,
+            then performance is monitored every 10 epochs; use
+            `dev_iter` to control this number.
+
+        Returns
+        -------
+        self
+
+        """
+        # Incremental performance:
+        X_dev = kwargs.get('X_dev')
+        if X_dev is not None:
+            dev_iter = kwargs.get('dev_iter', 10)
+        # Data prep:
+        X = np.array(X)
+        self.input_dim = X.shape[1]
+        self.classes_ = sorted(set(y))
+        self.n_classes_ = len(self.classes_)
+        class2index = dict(zip(self.classes_, range(self.n_classes_)))
+        y = [class2index[label] for label in y]
+        # Dataset:
+        X = torch.FloatTensor(X)
+        y = torch.tensor(y)
+        dataset = torch.utils.data.TensorDataset(X, y)
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=self.batch_size, shuffle=True,
+            pin_memory=True)
+        # Graph:
+        if not self.warm_start or not hasattr(self, "model"):
+            self.model = self.define_graph()
+            self.opt = self.optimizer(
+                self.model.parameters(),
+                lr=self.eta,
+                weight_decay=self.l2_strength)
+        self.model.to(self.device)
+        self.model.train()
+        # Optimization:
+        loss = nn.CrossEntropyLoss()
+        # Train:
+        with tqdm(total=self.max_iter) as pbar:
+            for iteration in range(1, self.max_iter+1):
+                epoch_error = 0.0
+                for X_batch, y_batch in dataloader:
+                    X_batch = X_batch.to(self.device, non_blocking=True)
+                    y_batch = y_batch.to(self.device, non_blocking=True)
+                    batch_preds = self.model(X_batch)
+                    err = loss(batch_preds, y_batch)
+                    epoch_error += err.item()
+                    self.opt.zero_grad()
+                    err.backward()
+                    self.opt.step()
+                # Incremental predictions where possible:
+                if X_dev is not None and iteration > 0 and iteration % dev_iter == 0:
+                    self.dev_predictions[iteration] = self.predict(X_dev)
+                    self.model.train()
+                self.errors.append(epoch_error)
+                progress_bar(
+                    "Finished epoch {} of {}; error is {}".format(
+                        iteration, self.max_iter, epoch_error))
+                pbar.update(1)
+        pbar.close()
+        return self
 
     def define_graph(self):
         """This method is used by `fit`. We override it here to use our
