@@ -24,7 +24,7 @@ logger.level = logging.ERROR
 
 
 class HfBertClassifierModel(nn.Module):
-    def __init__(self, max_sentence_length=118, weights_name='bert-base-uncased'):
+    def __init__(self, max_sentence_length=120, weights_name='bert-base-cased'):
         super().__init__()
         self.weights_name = weights_name
         self.bert = BertModel.from_pretrained(self.weights_name)
@@ -44,6 +44,24 @@ class HfBertClassifierModel(nn.Module):
 
         # initialize a random tensor
         self.L = torch.randn(self.hidden_dim, self.hidden_dim)
+
+    def save_pretrained(self, save_directory):
+        """ Save a model and its configuration file to a directory, so that it
+            can be re-loaded using the `:func:`~transformers.PreTrainedModel.from_pretrained`` class method.
+
+            Arguments:
+                save_directory: directory to which to save.
+        """
+        assert os.path.isdir(
+            save_directory
+        ), "Saving path should be a directory where the model and configuration can be saved"
+
+        # Only save the model itself if we are using distributed training
+        model_to_save = self.module if hasattr(self, "module") else self
+        # If we save using the predefined names, we can load using `from_pretrained`
+        output_model_file = os.path.join(save_directory, "pytorch_model.bin")
+        torch.save(model_to_save.state_dict(), output_model_file)
+        logger.info("Model weights saved in {}".format(output_model_file))
 
     def bilinear(self, head, tail):
         lin = torch.mm(head.reshape([-1, self.hidden_dim]), self.L).reshape([-1, self.max_sentence_length, self.hidden_dim])
@@ -132,6 +150,7 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
         self.model.train()
         # Optimization:
         loss = nn.BCELoss()
+        global_step = 0
         # Train:
         with tqdm(total=self.max_iter) as pbar:
             for iteration in range(1, self.max_iter+1):
@@ -146,6 +165,21 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
                     self.opt.zero_grad()
                     err.backward()
                     self.opt.step()
+                    global_step += 1
+
+                    # Save model checkpoint
+                    if global_step % 10 == 0:
+                        output_dir = os.path.join('checkpoints', "checkpoint-{}".format(global_step))
+                        if not os.path.exists(output_dir):
+                            os.makedirs(output_dir)
+                        model_to_save = (
+                            self.model.module if hasattr(self.model, "module") else self.model
+                        )  # Take care of distributed/parallel training
+                        model_to_save.save_pretrained(output_dir)
+                        self.tokenizer.save_pretrained(output_dir)
+                        logger.info("Saving model checkpoint to %s", output_dir)
+                        torch.save(self.opt.state_dict(), os.path.join(output_dir, "optimizer.pt"))
+                        logger.info("Saving optimizer and scheduler states to %s", output_dir)
 
                 # Incremental predictions where possible:
                 if X_dev is not None and iteration > 0 and iteration % dev_iter == 0:
@@ -413,6 +447,7 @@ def convert_examples_to_features(
 
 def run_experiment(batch_size=16, max_iter=4, eta=0.00002, test_size=0.2, random_state=42, datasize=None):
     print('Running exp')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     max_sentence_length = 120
     tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
     examples = convert_examples_to_features(DB_dataset, max_sentence_length, tokenizer)
@@ -431,6 +466,7 @@ def run_experiment(batch_size=16, max_iter=4, eta=0.00002, test_size=0.2, random
         max_sentence_length,
         batch_size=batch_size, # small batch size for use on notebook
         max_iter=max_iter,
+        device=device,
         eta=eta)
 
     time = bert_experiment_1.fit(train, **{'X_dev': dev})
