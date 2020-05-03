@@ -389,7 +389,12 @@ def convert_examples_to_features(
 
             relation_pairs_final = relation_pairs_tokenized_2[:,1:]
 
-            special_tokens_count = tokenizer.num_added_tokens()
+            # inconsistency with the new version of the Bert Transformer
+            try:
+                special_tokens_count = tokenizer.num_added_tokens()
+            except AttributeError:
+                special_tokens_count = tokenizer.num_special_tokens_to_add()
+
             if len(tokens) > max_seq_length - special_tokens_count:
                 tokens = tokens[: (max_seq_length - special_tokens_count)]
                 relation_pairs_final = relation_pairs_final[
@@ -442,14 +447,13 @@ def convert_examples_to_features(
     return features
 
 
-def run_experiment(batch_size=32, max_iter=4, eta=0.00002, test_size=0.2, random_state=42, datasize=None):
+def run_experiment(batch_size=32, max_iter=4, eta=0.00002, random_state=42, datasize=None, bert_model='bert-base-cased', max_sentence_length = 120):
     print('Running exp')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    max_sentence_length = 120
-    tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+    tokenizer = BertTokenizer.from_pretrained(bert_model)
     examples = convert_examples_to_features(DB_dataset, max_sentence_length, tokenizer)
     examples.extend(convert_examples_to_features(ML_dataset, max_sentence_length, tokenizer))
-    random.seed(42)
+    random.seed(random_state)
     random.shuffle(examples)
 
     train_index = int(0.7 * len(examples))
@@ -460,7 +464,7 @@ def run_experiment(batch_size=32, max_iter=4, eta=0.00002, test_size=0.2, random
     test = examples[dev_index:]
 
     bert_experiment_1 = HfBertClassifier(
-        'bert-base-uncased',
+        bert_model,
         max_sentence_length,
         batch_size=batch_size, # small batch size for use on notebook
         max_iter=max_iter,
@@ -475,5 +479,5 @@ def run_experiment(batch_size=32, max_iter=4, eta=0.00002, test_size=0.2, random
                                 digits=3))
 
 
-#run_experiment(datasize=100)
-run_experiment()
+run_experiment(datasize=100)
+#run_experiment()
