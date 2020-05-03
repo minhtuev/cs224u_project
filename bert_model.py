@@ -129,10 +129,10 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
         if X_dev is not None:
             dev_iter = kwargs.get('dev_iter', 10)
         # Data prep:
-        all_input_ids = torch.tensor([f.input_ids for f in X], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in X], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in X], dtype=torch.long)
-        all_rels = torch.tensor([f.rels for f in X], dtype=torch.float)
+        all_input_ids = torch.tensor([f.input_ids for f in X], dtype=torch.long).to(self.device)
+        all_input_mask = torch.tensor([f.input_mask for f in X], dtype=torch.long).to(self.device)
+        all_segment_ids = torch.tensor([f.segment_ids for f in X], dtype=torch.long).to(self.device)
+        all_rels = torch.tensor([f.rels for f in X], dtype=torch.float).to(self.device)
         dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_rels)
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=self.batch_size, shuffle=True,
@@ -474,5 +474,5 @@ def run_experiment(batch_size=32, max_iter=4, eta=0.00002, test_size=0.2, random
                                 digits=3))
 
 
-#run_experiment(datasize=200)
-run_experiment()
+run_experiment(datasize=100)
+#run_experiment()
