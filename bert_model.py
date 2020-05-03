@@ -475,5 +475,5 @@ def run_experiment(batch_size=32, max_iter=4, eta=0.00002, test_size=0.2, random
                                 digits=3))
 
 
-run_experiment(datasize=100)
-#run_experiment()
+#run_experiment(datasize=100)
+run_experiment()
