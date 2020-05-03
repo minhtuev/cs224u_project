@@ -441,7 +441,7 @@ def convert_examples_to_features(
     return features
 
 
-def run_experiment(batch_size=16, max_iter=4, eta=0.00002, test_size=0.2, random_state=42, datasize=None):
+def run_experiment(batch_size=32, max_iter=4, eta=0.00002, test_size=0.2, random_state=42, datasize=None):
     print('Running exp')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     max_sentence_length = 120
@@ -474,4 +474,5 @@ def run_experiment(batch_size=16, max_iter=4, eta=0.00002, test_size=0.2, random
                                 digits=3))
 
 
-run_experiment(datasize=200)
+#run_experiment(datasize=200)
+run_experiment()
