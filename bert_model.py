@@ -207,7 +207,7 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
 
             result = preds[0]
             for i in range(len(preds) - 1):
-                np.vstack((result, preds[i + 1]))
+                result = np.vstack((result, preds[i + 1]))
             return result
 
 
@@ -274,7 +274,7 @@ def convert_examples_to_features(
     for doc in dataset.documents:
         for sent in doc.sentences:
 
-            if counter > 100:
+            if counter > 10:
                 break
 
             counter += 1
@@ -439,8 +439,6 @@ def run_experiment(batch_size=16, max_iter=4, eta=0.00002, test_size=0.2, random
     print(classification_report(bert_experiment_1_preds.reshape(-1),
                                 np.asarray([item.rels for item in test]).reshape(-1),
                                 digits=3))
-
-    #bert_experiment_1.to_pickle('BERT_exp1.pkl')
 
 
 run_experiment(datasize=200)
