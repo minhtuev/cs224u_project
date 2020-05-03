@@ -30,6 +30,7 @@ class HfBertClassifierModel(nn.Module):
         self.bert = BertModel.from_pretrained(self.weights_name)
         self.hidden_dim = self.bert.embeddings.word_embeddings.embedding_dim
         self.max_sentence_length = max_sentence_length
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # dim : max length x max length
         self.head = nn.Sequential(
