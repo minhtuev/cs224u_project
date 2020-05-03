@@ -43,7 +43,7 @@ class HfBertClassifierModel(nn.Module):
             nn.Linear(self.max_sentence_length, self.hidden_dim))
 
         # initialize a random tensor
-        self.L = torch.randn(self.hidden_dim, self.hidden_dim)
+        self.L = torch.randn(self.hidden_dim, self.hidden_dim).to(self.device)
 
     def save_pretrained(self, save_directory):
         """ Save a model and its configuration file to a directory, so that it
