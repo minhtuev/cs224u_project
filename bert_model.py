@@ -230,7 +230,7 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
             dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_rels)
             dataloader = torch.utils.data.DataLoader(
                 dataset, batch_size=self.batch_size, shuffle=True,
-                pin_memory=True)
+                pin_memory=False ) #cannot pin GPU tensors
 
             preds = []
             for batch in dataloader:
