@@ -307,10 +307,6 @@ def convert_examples_to_features(
 
     for doc in dataset.documents:
         for sent in doc.sentences:
-
-            if counter > 10:
-                break
-
             counter += 1
 
             if sent.text == '':
@@ -451,6 +447,7 @@ def run_experiment(batch_size=16, max_iter=4, eta=0.00002, test_size=0.2, random
     max_sentence_length = 120
     tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
     examples = convert_examples_to_features(DB_dataset, max_sentence_length, tokenizer)
+    examples.extend(convert_examples_to_features(ML_dataset, max_sentence_length, tokenizer))
     random.seed(42)
     random.shuffle(examples)
 
