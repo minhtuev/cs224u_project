@@ -256,14 +256,181 @@ def create_classification_task(dataset, maxsize=None):
     return classification_task_df
 
 
+
+class InputFeatures(object):
+    """A single set of features of data."""
+
+    def __init__(self, input_ids, input_mask, segment_ids, rels):
+        self.input_ids = input_ids
+        self.input_mask = input_mask
+        self.segment_ids = segment_ids
+        self.rels = rels
+
+
+def convert_examples_to_features(
+    dataset,
+    max_seq_length,
+    tokenizer,
+    cls_token_at_end=False,
+    cls_token="[CLS]",
+    cls_token_segment_id=1,
+    sep_token="[SEP]",
+    sep_token_extra=False,
+    pad_on_left=False,
+    pad_token=0,
+    pad_token_segment_id=0,
+    pad_token_label_id=-100,
+    sequence_a_segment_id=0,
+    mask_padding_with_zero=True,
+):
+    """ Loads a data file into a list of `InputBatch`s
+        `cls_token_at_end` define the location of the CLS token:
+            - False (Default, BERT/XLM pattern): [CLS] + A + [SEP] + B + [SEP]
+            - True (XLNet/GPT pattern): A + [SEP] + B + [SEP] + [CLS]
+        `cls_token_segment_id` define the segment id associated to the CLS token (0 for BERT, 2 for XLNet)
+    """
+    features = []
+
+    for doc in dataset.documents:
+        for sent in doc.sentences:
+            print(sent.text)
+            word_tokens = sent.text.split()
+            relation_pairs = [[] for _ in range(len(word_tokens))]
+
+            # fill with no relation
+            for i in range(len(word_tokens)):
+                for j in range(len(word_tokens)):
+                    relation_pairs[i].append(0)
+
+            entity_map = {}
+            for entity in sent.entities:
+                entity_map[entity._id] = entity.char_offset
+
+            for key in sent.map:
+                source_start, source_end = [int(x) for x in entity_map[key].split('-')]
+                dst_start, dst_end = [int(x) for x in entity_map[sent.map[key][0]].split('-')]
+
+                source_indices = []
+                dst_indices = []
+                num_source_source = len(sent.text[source_start: source_end + 1].split())
+                num_dst_source = len(sent.text[dst_start: dst_end + 1].split())
+
+                curr_span = 0
+                for i, token in enumerate(word_tokens):
+                    if curr_span == source_start:
+                        source_indices.append(i)
+                        for _ in range(num_source_source - 1):
+                            i += 1
+                            source_indices.append(i)
+                        break
+                    else:
+                        curr_span += len(token) + 1
+
+                curr_span = 0
+                for i, token in enumerate(word_tokens):
+                    if curr_span == dst_start:
+                        dst_indices.append(i)
+                        for _ in range(num_dst_source - 1):
+                            curr_span += 1
+                            dst_indices.append(i)
+                        break
+                    else:
+                        curr_span += len(token) + 1
+
+                for i in source_indices:
+                    for j in dst_indices:
+                        relation_pairs[i][j] = 1
+
+            relation_pairs = np.asarray(relation_pairs)
+            relation_pairs_tokenized = []
+
+            tokens = [cls_token]
+
+            for i, word_i in enumerate(word_tokens):
+                src_word_tokens = tokenizer.tokenize(word_i)
+                for tok in src_word_tokens:
+                    relation_pairs_tokenized.append(relation_pairs[i])
+                    tokens.append(tok)
+
+            relation_pairs_tokenized = np.asarray(relation_pairs_tokenized)
+
+            # if sent.text == 'Table 1 Changes in Desloratadine and 3-Hydroxydesloratadine Pharmacokinetics in Healthy Male and Female Volunteers':
+            #     #import pdb; pdb.set_trace()
+            #     pass
+
+            relation_pairs_tokenized_2 = np.asarray(relation_pairs_tokenized)[:,0]
+
+            for j, word_j in enumerate(word_tokens):
+                dst_word_tokens = tokenizer.tokenize(word_j)
+                for _ in range(len(dst_word_tokens)):
+                    relation_pairs_tokenized_2 = np.column_stack((
+                        relation_pairs_tokenized_2, relation_pairs_tokenized[:,j]))
+
+            relation_pairs_final = relation_pairs_tokenized_2[:,1:]
+
+            special_tokens_count = tokenizer.num_added_tokens()
+            if len(tokens) > max_seq_length - special_tokens_count:
+                tokens = tokens[: (max_seq_length - special_tokens_count)]
+                relation_pairs_final = relation_pairs_final[
+                                       : (max_seq_length - special_tokens_count),
+                                       : (max_seq_length - special_tokens_count)]
+
+            segment_ids = [sequence_a_segment_id] * len(tokens)
+            segment_ids = [cls_token_segment_id] + segment_ids
+            tokens += [sep_token]
+
+            # add rel for [CLS] token
+            rel = [0 for _ in range(relation_pairs_final.shape[0])]
+            relation_pairs_final = np.row_stack((rel, relation_pairs_final))
+            rel = [0 for _ in range(relation_pairs_final.shape[0])]
+            relation_pairs_final = np.column_stack((rel, relation_pairs_final))
+
+            # add rel for [SEP] token
+            rel = [0 for _ in range(relation_pairs_final.shape[0])]
+            relation_pairs_final = np.row_stack((relation_pairs_final, rel))
+            rel = [0 for _ in range(relation_pairs_final.shape[0])]
+            relation_pairs_final = np.column_stack((relation_pairs_final, rel))
+
+            input_ids = tokenizer.convert_tokens_to_ids(tokens)
+            input_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
+
+            # Zero-pad up to the sequence length.
+            padding_length = max_seq_length - len(input_ids)
+            input_ids += [pad_token] * padding_length
+            input_mask += [0 if mask_padding_with_zero else 1] * padding_length
+            segment_ids += [pad_token_segment_id] * padding_length
+
+            rel = [0 for _ in range(relation_pairs_final.shape[0])]
+            for _ in range(padding_length):
+                relation_pairs_final = np.row_stack((rel, relation_pairs_final))
+
+            rel = [0 for _ in range(relation_pairs_final.shape[0])]
+            for _ in range(padding_length):
+                relation_pairs_final = np.column_stack((rel, relation_pairs_final))
+
+            assert len(input_ids) == max_seq_length
+            assert len(input_mask) == max_seq_length
+            assert len(segment_ids) == max_seq_length
+            assert len(relation_pairs_final) == max_seq_length
+
+            features.append(
+                InputFeatures(input_ids=input_ids, input_mask=input_mask,
+                              segment_ids=segment_ids, rels=relation_pairs_final)
+            )
+
+    return features
+
+
 def run_experiment(batch_size=16, max_iter=4, eta=0.00002, test_size=0.2, random_state=42, datasize=None):
     print('Running exp')
+    max_sentence_length = 120
+    tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+    convert_examples_to_features(DB_dataset, max_sentence_length, tokenizer)
     classification_task_df = pd.concat([
         create_classification_task(DB_dataset, maxsize=datasize),
         create_classification_task(ML_dataset, maxsize=datasize)
     ])
 
-    max_sentence_length = 120
     bert_experiment_1 = HfBertClassifier(
         'bert-base-uncased',
         max_sentence_length,
@@ -272,6 +439,7 @@ def run_experiment(batch_size=16, max_iter=4, eta=0.00002, test_size=0.2, random
         eta=eta)
 
     X_text_train, X_text_test, y_train, y_test = train_test_split(classification_task_df['sentence'], classification_task_df['label'], test_size=test_size, random_state=random_state)
+    import pdb; pdb.set_trace()
     X_indices_train = bert_experiment_1.encode(X_text_train, max_length=max_sentence_length)
     X_indices_test = bert_experiment_1.encode(X_text_test, max_length=max_sentence_length)
     time = bert_experiment_1.fit(X_indices_train, y_train)
