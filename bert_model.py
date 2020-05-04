@@ -136,7 +136,7 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
         all_segment_ids = torch.tensor([f.segment_ids for f in X], dtype=torch.long).to(self.device)
         all_rels = torch.tensor([f.rels for f in X], dtype=torch.float).to(self.device)
         all_pairs = torch.tensor([f.head_tail_pairs for f in X], dtype=torch.bool).to(self.device)
-        dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_rels, all_pairs).to(self.device)
+        dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_rels, all_pairs)
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=self.batch_size, shuffle=True,
             pin_memory=False) #cannot pin for GPU tensors
