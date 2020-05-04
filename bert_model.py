@@ -169,7 +169,7 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
                     global_step += 1
 
                     # Save model checkpoint
-                    if global_step % 10 == 0:
+                    if global_step % 100 == 0:
                         output_dir = os.path.join('checkpoints', "checkpoint-{}".format(global_step))
                         if not os.path.exists(output_dir):
                             os.makedirs(output_dir)
@@ -184,7 +184,10 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
 
                 # Incremental predictions where possible:
                 if X_dev is not None and iteration > 0 and iteration % dev_iter == 0:
-                    self.dev_predictions[iteration] = self.predict(X_dev)
+                    preds = self.predict(X_dev)
+                    print(classification_report(preds.reshape(-1),
+                                                np.asarray([item.rels for item in X_dev]).reshape(-1),
+                                                digits=3))
                     self.model.train()
 
                 self.errors.append(epoch_error)
@@ -238,7 +241,7 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
                 inputs = {"input_ids": batch[0], "attention_mask": batch[1]}
                 inputs["token_type_ids"] = (batch[2])
                 batch_preds = self.model(**inputs)
-                preds.append(torch.round(batch_preds).cpu().numpy())
+                preds.append(torch.round(batch_preds).to(dtype=torch.int).cpu().numpy())
 
             result = preds[0]
             for i in range(len(preds) - 1):
@@ -310,6 +313,9 @@ def convert_examples_to_features(
         for sent in doc.sentences:
             counter += 1
 
+            if counter > 50:
+                break
+
             if sent.text == '':
                 continue
 
@@ -323,12 +329,13 @@ def convert_examples_to_features(
 
             entity_map = {}
             for entity in sent.entities:
-                if len(entity.char_offset.split()) == 2:
+                if len(entity.char_offset.split('-')) == 2:
                     entity_map[entity._id] = entity.char_offset
 
             for key in sent.map:
 
                 if key not in entity_map:
+                    print("frand")
                     continue
 
                 source_start, source_end = [int(x) for x in entity_map[key].split('-')]
