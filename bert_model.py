@@ -209,7 +209,6 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
 
         """
         bert = HfBertClassifierModel(weights_name=self.weights_name, max_sentence_length=self.max_sentence_length)
-        bert.train()
         return bert
 
     def predict(self, X):
