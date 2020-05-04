@@ -312,21 +312,16 @@ def convert_examples_to_features(
 
     for doc in dataset.documents:
         for sent in doc.sentences:
+            if sent.text == '':
+                continue
+
             counter += 1
 
             if datasize and counter > datasize:
                 break
 
-            if sent.text == '':
-                continue
-
             word_tokens = sent.text.split()
-            relation_pairs = [[] for _ in range(len(word_tokens))]
-
-            # fill with no relation
-            for i in range(len(word_tokens)):
-                for j in range(len(word_tokens)):
-                    relation_pairs[i].append(0)
+            relation_pairs = [[0]*range(len(word_tokens))]*range(len(word_tokens))
 
             entity_map = {}
             for entity in sent.entities:
