@@ -105,6 +105,7 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
         self.max_sentence_length = max_sentence_length or 118
         # default to bert-uncased
         self.tokenizer = BertTokenizer.from_pretrained(self.weights_name)
+        self.model: HfBertClassifierModel = None
         super().__init__(*args, **kwargs)
 
 
@@ -298,6 +299,7 @@ def convert_examples_to_features(
     pad_token_label_id=-100,
     sequence_a_segment_id=0,
     mask_padding_with_zero=True,
+    datasize=None
 ):
     """ Loads a data file into a list of `InputBatch`s
         `cls_token_at_end` define the location of the CLS token:
@@ -313,7 +315,7 @@ def convert_examples_to_features(
         for sent in doc.sentences:
             counter += 1
 
-            if counter > 50:
+            if datasize and counter > datasize:
                 break
 
             if sent.text == '':
@@ -458,8 +460,8 @@ def run_experiment(batch_size=32, max_iter=4, eta=0.00002, random_state=42, data
     print('Running exp')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = BertTokenizer.from_pretrained(bert_model)
-    examples = convert_examples_to_features(DB_dataset, max_sentence_length, tokenizer)
-    examples.extend(convert_examples_to_features(ML_dataset, max_sentence_length, tokenizer))
+    examples = convert_examples_to_features(DB_dataset, max_sentence_length, tokenizer, datasize=datasize)
+    examples.extend(convert_examples_to_features(ML_dataset, max_sentence_length, tokenizer, datasize=datasize))
     random.seed(random_state)
     random.shuffle(examples)
 
