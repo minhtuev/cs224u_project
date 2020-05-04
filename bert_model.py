@@ -105,7 +105,7 @@ class HfBertClassifier(TorchShallowNeuralClassifier):
         self.max_sentence_length = max_sentence_length or 118
         # default to bert-uncased
         self.tokenizer = BertTokenizer.from_pretrained(self.weights_name)
-        self.model: HfBertClassifierModel = None
+        self.model = None
         super().__init__(*args, **kwargs)
 
 
