@@ -326,7 +326,7 @@ def convert_examples_to_features(
                 break
 
             word_tokens = sent.text.split()
-            relation_pairs = [[0]*range(len(word_tokens))]*range(len(word_tokens))
+            relation_pairs = [[0]*len(word_tokens)]*len(word_tokens)
 
             entity_map = {}
 
